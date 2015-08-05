@@ -133,26 +133,77 @@ setup_irq:
         cli          ; clear interrupt disable flag
         rts
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+!macro add16 x1, x2, r {
+        clc
+        lda x1
+        adc x2
+        sta r
+        lda x1+1
+        adc x2+1
+        sta r+1
+}
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+!macro inc16 x1 {
+        inc x1
+        bne .exit
+        inc x1+1
+.exit:
+}
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+!macro dec16 x1 { 
+        lda x1
+        bne .exit
+        dec x1+1
+.exit:
+        dec x1
+}
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 irq:
         dec $d019               ; ack irq
 
         lda $dc00               ; joystick2
         and #%00000100          ; left
-        bne .not_right
-        dec ship_x
-.not_right:
+        bne .not_left
+        +dec16 ship_x
+.not_left:
         lda $dc00               ; joystick2
         and #%00001000          ; right
-        bne .not_left
-        inc ship_x
-.not_left:               
+        bne .not_right
+        +inc16 ship_x
+.not_right:
+        jsr update_ship_pos
+        
+.exit_irq:
+        jmp $ea81    ; return to kernel interrupt routine
+
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+update_ship_pos:
+!zone {
 	    lda ship_x
 	    sta $d000		; set x sprite 0
 	    lda ship_y
 	    sta $d001		; set y sprite 0
-.exit_irq:
-        jmp $ea81    ; return to kernel interrupt routine
 
+        lda ship_x+1
+        cmp #0
+        bne .far_right
+.not_far_right:
+        lda $d010
+        and #%11111110
+        sta $d010
+        jmp .exit
+.far_right:
+        lda $d010
+        ora #%00000001
+        sta $d010
+.exit:
+        rts
+}
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+const1:
+        !byte $01
+const0:
+        !byte $00
 chars:
         ;;
         !8 %........
@@ -206,7 +257,7 @@ ship_sprite:
         +SpriteLine %.........#####..........
         +SpriteLine %.......#########........
         +SpriteLine %......###########.......
-        +SpriteLine %..####################..
+        +SpriteLine %...##################...
         +SpriteLine %..####################..
         +SpriteLine %..###..###....###..###..
         +SpriteLine %..###..###....###..###..
